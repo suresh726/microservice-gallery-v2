@@ -1,0 +1,122 @@
+version: "3.9"
+services:
+  admin-frontend-app:
+    build:
+      context: admin-frontend-app
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    ports:
+      - 8000:8000
+    volumes:
+      - ./admin-frontend-app/app:/var/www/html/app
+    networks:
+      - microservice-network
+
+  category-app:
+    build:
+      context: ./category-app/
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    volumes:
+      - ./category-app/app:/var/www/html/app
+      - ./db-storage/category.sqlite:/var/www/html/database/database.sqlite
+    networks:
+      - microservice-network
+
+  imagelist-app:
+    build:
+      context: ./imagelist-app
+      dockerfile: Dockerfile
+    command: 'php artisan serve --host=0.0.0.0'
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_QUEUE=category
+      env_file:
+        - ./.env
+    volumes:
+      - ./imagelist-app/app:/var/www/html/app
+      - ./db-storage/imagelist.sqlite:/var/www/html/database/database.sqlite
+    networks:
+      - microservice-network
+
+  imagelist-queue:
+    build:
+      context: ./imagelist-app
+      dockerfile: Dockerfile
+    command: 'php artisan rabbitmq:consume'
+    environment:
+      - RABBITMQ_QUEUE=category
+    env_file:
+        - ./.env
+    restart: unless-stopped
+    volumes:
+      - ./db-storage/imagelist.sqlite:/var/www/html/database/database.sqlite
+    networks:
+      - microservice-network
+
+  imagedetail-app:
+    build:
+      context: ./imagedetail-app
+      dockerfile: Dockerfile
+    command: 'php artisan serve --host=0.0.0.0'
+    environment:
+      - RABBITMQ_QUEUE=image-detail
+    env_file:
+      - ./.env
+    restart: unless-stopped
+    volumes:
+      - ./imagedetail-app/app:/var/www/html/app
+      - ./db-storage/imagedetail.sqlite:/var/www/html/database/database.sqlite
+    networks:
+      - microservice-network
+
+  imagedetail-queue:
+    build:
+      context: ./imagedetail-app
+      dockerfile: Dockerfile
+    command: 'php artisan rabbitmq:consume'
+    environment:
+      - RABBITMQ_QUEUE=image-detail
+    env_file:
+        - ./.env
+    restart: unless-stopped
+    volumes:
+      - ./db-storage/imagedetail.sqlite:/var/www/html/database/database.sqlite
+    networks:
+      - microservice-network
+
+  auth-app:
+    build:
+      context: auth-app
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - 8004:8000
+    volumes:
+      - ./auth-app/app:/var/www/html/app
+      - ./db-storage/auth.sqlite:/var/www/html/database/database.sqlite
+    networks:
+      - microservice-network
+
+  rabbitmq-management:
+    image: rabbitmq:3-management-alpine
+    hostname: my-rabbitmq
+    container_name: rabbitmq
+    volumes:
+      - ./rabbitmq/rabbitmq-definitions.json:/etc/rabbitmq/definitions.json
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+      - ./rabbitmq/data:/var/lib/rabbitmq/mnesia/rabbit@my-rabbitmq
+
+    ports:
+      - 15672:15672
+      - 5672:5672
+    networks:
+      - microservice-network
+networks:
+  microservice-network:
+    driver: "bridge"
+
